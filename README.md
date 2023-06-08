@@ -42,3 +42,10 @@ A count of the number of each type of incident The mean response time for each t
 A t-test comparing Ealing and Greenwich
 Use a t-test to compare the mean response times in Ealing to those in Greenwich.
 You should report the results using Null Hypothesis Significance Testing, and the estimation approach.
+
+
+**Data file**
+
+
+https://drive.google.com/drive/folders/1uy1kPcqWTQkmIZQb7m-1bCdlJXqBg_ks
+
