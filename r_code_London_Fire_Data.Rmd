@@ -1,0 +1,524 @@
+---
+title: "Business Statistics Mid-Term Assessment IB94X0 2022-2023 #1"
+author: "2227324"
+output: html_document
+---
+
+# Acknowledgement
+
+---
+
+This is to certify that the work I am submitting is my own. All external references and sources are clearly acknowledged and identified within the contents. I am aware of the University of Warwick regulation concerning plagiarism and collusion. 
+
+No substantial part(s) of the work  submitted  here has also been submitted by  me  in other assessments for accredited courses of study, and I acknowledge that if this has been done an appropriate reduction in the mark I might otherwise have received will be made.
+
+---
+
+# Section 1 
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width=100)
+
+#install.packages("tidyverse")
+#install.packages("lubridate")
+#install.packages("gridExtra")
+#install.packages("kableExtra")
+#install.packages("emmeans")
+
+library(gridExtra)
+
+library(kableExtra)
+
+library(tidyverse)
+
+library(lubridate)
+
+library(emmeans)
+```
+
+This analysis on the London Fire Brigade data fulfills the below mentioned asks from the
+service managers and local politicians:
+
+1.1 The cost of responding to fire and false alarms
+
+1.2 The distribution of response time by Incident Group
+
+1.3 Summary of the special services response times
+
+1.4 A t-test comparing the mean response time of Ealing and Greenwich 
+
+---
+
+## Data Dictionary
+
+This data dictionary is provided by the London Fire Brigade department. Features pertinent to the
+the analysis are described below:
+
+Feature | Description
+------------- | -------------
+CalYear | Calender year of the Incident Call
+IncidentGroup | Type of Indicent - Fire, False Alarm, Specail Services
+SpecialServiceType| Type of Special Services 
+FirstPumpArriving_AttendanceTime| The Response Time in seconds
+Notional_Cost| Cost associated with the Incident
+IncidentStationGround| A description of the fire station area ("Ground") where the incident happened 
+---
+
+
+## Read London Fire Brigade Data
+
+```{r read_data}
+
+# reading the data in r environment
+
+fire_data <- read_csv("London_Fire_data.csv", guess_max = 10000)
+
+# Note - no. of rows and columns imported are checked against the csv file
+```
+```{r df_summary, include= FALSE}
+
+# Checking the Structure and Summary of the data
+
+# checking the summary
+str(fire_data)
+
+# checking the structure
+summary(fire_data)
+
+```
+
+# Assumptions
+
+Please note below assumptions made for the analysis:
+
+1. Assuming 'Time-Period' refers to the Year based calculation.
+
+2. As evident from the data, date ranges from 01-01-2019 to 31-01-2022(DD-MM-YYYY). In other words,
+data for Year 2022 is incomplete.
+
+3. For ask 1.1, the cost trends are obtained at the yearly level.
+
+4. While analysing the cost of fire alarms, special services are not considered in 1.1.
+
+5. In the provided .csv file, the Notional Cost column name had an issue of special characters. This issue is resolved by renaming the column name to 'Notional_Cost' prior to uploading the file in r environment.
+
+```{r TimePeriod_IndicentGroups_Checks}
+
+# time period check
+fire_data %>%
+  summarize(min = min(CalYear), max = max(CalYear))
+
+
+# unique descriptions in IncidentGroup
+
+distinct(fire_data, IncidentGroup)
+
+```
+## 1.1 The cost of responding to Fire and False alarms
+
+### Step 1.1.1 - Calculating Total and Mean cost trends at the yearly level
+
+```{r Total_&_Mean_Fire_False_cost}
+
+# Total and Mean fire cost by year
+
+# with comma separator
+fire_cost_comma <- fire_data %>%
+  filter(IncidentGroup == 'Fire') %>%
+  group_by(CalYear) %>%
+  summarize(Total_fire_cost = formatC(sum(Notional_Cost, na.rm = TRUE),format="f", big.mark = ",",  digits=0 ),
+            Mean_fire_cost = mean(Notional_Cost, na.rm = TRUE))
+
+# without comma separator
+fire_cost <- fire_data %>%
+  filter(IncidentGroup == 'Fire') %>%
+  group_by(CalYear) %>%
+  summarize(Total_fire_cost = sum(Notional_Cost, na.rm = TRUE),
+            Mean_fire_cost = mean(Notional_Cost, na.rm = TRUE))
+
+# false alarm cost by year
+
+# with comma separator
+false_cost_comma <- fire_data %>%
+  filter(IncidentGroup == 'False Alarm') %>%
+  group_by(CalYear) %>%
+  summarize(Total_false_cost = formatC(sum(Notional_Cost, na.rm = TRUE),format="f", big.mark = ",",  digits=0 ),
+            Mean_false_cost = mean(Notional_Cost, na.rm = TRUE))
+
+# without comma separator
+false_cost <- fire_data %>%
+  filter(IncidentGroup == 'False Alarm') %>%
+  group_by(CalYear) %>%
+  summarize(Total_false_cost = sum(Notional_Cost, na.rm = TRUE),
+            Mean_false_cost = mean(Notional_Cost, na.rm = TRUE))
+
+# combined fire and flase alarm summary into one table
+
+cost_summary_comma <- inner_join(fire_cost_comma,false_cost_comma,by = "CalYear")
+
+cost_summary <- inner_join(fire_cost,false_cost,by = "CalYear")
+#cost_summary
+
+Total_cost_summary_comma <- cost_summary_comma %>%
+  select(CalYear,Total_fire_cost,Total_false_cost)
+
+#Total_cost_summary_comma
+
+Total_cost_summary <- cost_summary %>%
+  select(CalYear,Total_fire_cost,Total_false_cost)
+
+#Total_cost_summary
+
+
+Mean_cost_summary <- cost_summary %>%
+  select(CalYear,Mean_fire_cost,Mean_false_cost)
+
+#Mean_cost_summary
+
+```
+
+
+```{r}
+# Final Total and Mean Cost Summary
+
+cost_summary_comma %>%
+  kbl(caption = "Table 1. Total and Mean Cost ( in £) of responding to Fire and False alarms",
+      col.names = c("Year","Total Fire Cost (£)","Mean Fire Cost (£)","Total False Cost (£)","Mean False Cost (£)")) %>%
+  kable_styling(position = "center")
+
+```
+
+
+### Step 1.1.2 - Coverting above tables from wide format to long format to aid visualization
+
+```{r long_format}
+Total_cost_long <- gather(Total_cost_summary, key="measure", value="value", c("Total_fire_cost","Total_false_cost"))
+
+Total_cost_long
+
+Mean_cost_long <- gather(Mean_cost_summary, key="measure", value="value", c("Mean_fire_cost","Mean_false_cost"))
+
+Mean_cost_long
+```
+### Step 1.1.3 - Visualizing the Total Cost trends for Fire and False alarm
+
+```{r plot_total_cost_trends}
+# By Year - Total cost trends
+
+total_cost_trends <- ggplot(Total_cost_long, aes(x=CalYear, y=value))+
+  geom_bar(stat='identity',fill="forest green")+
+  ylab("Total Cost (£/1000000)")+
+  facet_wrap(~measure)+
+  geom_text(aes(label = round(value/1000000,1)), vjust = -0.2, colour = 'black')
+
+total_cost_trends
+
+```
+
+### Step 1.1.4 - Visualizing the Mean Cost trends for Fire and False alarm
+
+```{r plot_mean_cost_trends}
+# By Year - mean cost trends
+
+mean_cost_trends <- ggplot(Mean_cost_long, aes(x=CalYear, y=value))+
+  geom_bar(stat='identity',fill="forest green")+
+  ylab("Mean Cost (£)")+
+  facet_wrap(~measure)+
+  geom_text(aes(label = round(value,0)), vjust = -0.2, colour = 'black')
+
+mean_cost_trends
+
+```
+
+
+## 1.2 The distribution of response time by Incident Group
+
+### Step 1.2.1 Fequency distribution of the response time for all incident groups
+
+```{r response_time, warning=FALSE}
+
+# Filtering the data where FirstPumpArriving_AttendanceTime is not NA
+
+inc_resp_df <- fire_data %>%
+  filter(is.na(FirstPumpArriving_AttendanceTime) != TRUE) %>%
+  select(IncidentGroup,FirstPumpArriving_AttendanceTime)
+
+# visualisation showing response times
+
+resp_time_freq <- ggplot(inc_resp_df, aes(x = FirstPumpArriving_AttendanceTime)) +
+  geom_histogram(binwidth = 30)+
+  ggtitle("Distribution of Response Time")+
+  xlab("Response Time in sec") + ylab("Incidents")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlim(-100, 1300)
+
+resp_time_freq
+
+```
+
+
+### Step 1.2.2 Distribution of Response Time by Incident Group
+
+```{r response_time_by_incident}
+
+# Summarizing the data by the incident group
+
+inc_resp <- fire_data %>%
+  filter(is.na(FirstPumpArriving_AttendanceTime) != TRUE) %>%
+  select(IncidentGroup,FirstPumpArriving_AttendanceTime) %>%
+  group_by(IncidentGroup) %>%
+  summarize(response_time = sum(FirstPumpArriving_AttendanceTime))
+
+# Distribution of Response Time by Incident Group
+
+resp_incgrp_comp <- ggplot(inc_resp_df, aes(x = FirstPumpArriving_AttendanceTime, colour = IncidentGroup))+
+  geom_histogram(binwidth = 50,position = "identity", alpha = 0.5)+
+  ggtitle("Distribution of Response Time by Incident Group")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlab("Response Time in sec") + ylab("Frequency")
+
+resp_incgrp_comp
+
+```
+
+
+## 1.3 Summary of the special service response times
+
+---
+
+### Assumptions:
+
+1. There are special services for which descriptions are not available reported under 'Not_Available' category
+
+2. FirstPumpArriving_AttendanceTime having non NA values are retained for percentile calculation
+
+---
+
+### Step 1.3.1 Creating the special services data frame
+
+
+```{r special_service_resp_time_df}
+
+spec_svc_df <- fire_data %>%
+  filter(IncidentGroup == 'Special Service',is.na(FirstPumpArriving_AttendanceTime) != TRUE) %>%
+  select(SpecialServiceType,FirstPumpArriving_AttendanceTime) %>%
+  mutate(SpecSvcDesc_NA = ifelse(is.na(SpecialServiceType == TRUE),"Not_Available",SpecialServiceType))
+
+
+# checking the unique SpecialServiceType descriptions in the above df
+
+spec_svc_desc <- distinct(spec_svc_df,SpecSvcDesc_NA)
+# there are 21 types of description
+
+```
+
+### Step 1.3.2 Frequency, mean, 10th and 90th percentile of response type for each special service type
+
+```{r special_service_resp_time_summary}
+
+spec_svc_summary <- spec_svc_df %>%
+  group_by(SpecSvcDesc_NA) %>%
+  summarize(spec_svc_count =formatC ( n(), format="f", big.mark = ",",  digits=0 ),
+            mean_resp_time = mean(FirstPumpArriving_AttendanceTime, na.rm = TRUE),
+            Per_10th = quantile(FirstPumpArriving_AttendanceTime,c(0.1)),
+            Per_90th = quantile(FirstPumpArriving_AttendanceTime,c(0.9))) %>%
+  arrange(SpecSvcDesc_NA)
+
+spec_svc_summary %>%
+  kbl(caption = "Table 3. Special Services Summary",
+      col.names = c("Special Service","Frequency","Mean Response Time (in sec)","10 Percentile","90 Percentile") ) %>%
+  kable_styling()
+
+```
+
+
+## 1.4 A t-test comparing the mean response time of Ealing and Greenwich 
+
+
+### Section 1.4.1 T-Test
+
+
+#### Assumption - Data for Ealing and Greenwich grounds is extracted based IncidentStationGround column
+
+
+
+```{r t_test}
+
+# df creation for t test
+
+t_test_df <- fire_data %>%
+  filter((IncidentStationGround == 'Ealing' | IncidentStationGround == 'Greenwich') & is.na(FirstPumpArriving_AttendanceTime)!= TRUE) %>%
+  select(IncidentStationGround,FirstPumpArriving_AttendanceTime)
+
+# Calculating mean, sd and freq for the Ealing and Greenwich
+
+eal_green_summary <- t_test_df %>%
+  group_by(IncidentStationGround) %>%
+  summarize(mean = mean(FirstPumpArriving_AttendanceTime, na.rm = TRUE),
+            sd = sd(FirstPumpArriving_AttendanceTime, na.rm = TRUE),
+            n = n())
+
+# ggplot to visualize the normal distribution
+ealing_green_histogram <- ggplot(t_test_df, aes(x = FirstPumpArriving_AttendanceTime,fill = IncidentStationGround))+
+  geom_histogram(binwidth = 30, position = "identity", alpha = 0.5)+
+  ggtitle("Distribution of Response Time for Ealing and Greenwich")+
+  xlab("Response Time in sec") + ylab("Frequency")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+ealing_green_histogram
+
+# two sample t-test
+
+t.test(FirstPumpArriving_AttendanceTime~IncidentStationGround, data=t_test_df)
+
+```
+
+
+### Section 1.4.2 Estimations Approach
+
+```{r estimations}
+
+# Utilising General Linear model for estimations
+
+# 1. Mean response time for each ground stations
+
+estimate_resp_time <- lm(FirstPumpArriving_AttendanceTime~IncidentStationGround, data=t_test_df)
+(  estimate_resp_time_emm <- emmeans(estimate_resp_time, ~IncidentStationGround)  )
+
+# 2. Mean difference response time
+
+(  estimate_resp_time_contrast <- confint(pairs(estimate_resp_time_emm))  )
+
+```
+
+
+# Section 2
+
+
+This part of the report explains the analyses request by the panel members of the London Fire Brigade board.
+
+
+## 2.1 The cost of responding to fires and false alarms
+
+This section summarises the Total cost and Mean cost of responding to the fire and false alarms
+
+```{r, echo=FALSE}
+Total_cost_summary_comma %>%
+  kbl(caption = "Table 1. Total Cost ( in £) of responding to Fire and False alarms",
+      col.names = c("Year","Total Fire Cost (£)","Total False Cost (£)") ) %>%
+  kable_styling()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+total_cost_trends
+```
+
+
+```{r, echo=FALSE}
+Mean_cost_summary %>%
+  kbl(caption = "Table 2. Mean Cost ( in £) of responding to Fire and False alarms",
+      col.names = c("Year","Mean Fire Cost (£)","Mean False Cost (£)") ) %>%
+  kable_styling()
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+mean_cost_trends
+```
+
+As evident from above data Tables ( 1 and 2) and Bar charts, the total cost of fire decreases on a YoY basis*. However, the mean fire cost does not show any such trend.
+On the other hand, the total and mean cost of false alarms remains within a range on a YoY basis.
+
+** Please refer to assumption 2 while interpreting YoY cost trends.
+
+## 2.2 The distribution of response time by Incident Group
+
+This section displays the requested visualisations concerning the response time. 
+
+London fire brigade data for the given time period shows a skewed normal distribution (shown below) with respect to frequency of response time (in secs). The curve peaks at around 250 secs (4 mins) response time.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+resp_time_freq
+```
+
+Below figure would help us to compare the response time across the three different incident groups. As evident, the response time for each incident group peaks around 250 secs, however, the false alarms has the highest incidence followed by fire and special services.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+resp_incgrp_comp
+```
+
+## 2.3 Summary of the special service response times
+
+This section summarises the services rendered to special incident groups. 
+
+For the given time period, the below table (Table 3) shows that Effecting entry/exit (n = 23,300), Flooding (n = 20,428), and RTC (n= 12,077) are the top 3 frequent occurrences ( in order). On the other hand, Rescue or Evacuation From the water (n = 160), Stand By (n= 154 ), and Water Provision (n= 1) are the least rendered special services ( in order).
+Percentile data suggests that 90% of the top 3 special service incidents are responded within 8 mins (485 seconds), while 10% of these incidents are responded within 3 mins (176 seconds).
+On the other hand, 90% of the least 3 occurrences are responded within 7 mins (400 seconds), while 10% of these incidents took less than 3.5 mins (195 seconds).
+
+```{r, echo=FALSE}
+spec_svc_summary %>%
+  kbl(caption = "Table 3. Special Services Summary",
+      col.names = c("Special Service","Frequency","Mean Response Time (in sec)","10 Percentile","90 Percentile") ) %>%
+  kable_styling()
+```
+
+
+## 2.4 A t-test comparing the mean response time of Ealing and Greenwich
+
+### 2.4.1 T-Test Summary
+
+To compare the mean response time of Ealing and Greenwich, the independent-sample t-test is performed. Table 4 below shows summary statistics - mean, standard deviation, and frequency. In addition, normal distributions are also obtained to gauge the skewness of the data.
+
+```{r, echo=FALSE}
+eal_green_summary %>%
+  kbl(caption = "Table 4. Summary Statistics of Ealing and Greenwich",
+      col.names = c("Incident Ground","Mean Response Time (in sec)","Standard Deviation","n")) %>%
+  kable_styling()
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+ealing_green_histogram
+```
+
+
+As evident from the results below of the two-sample t-test, the magnitude of p-value is very less (p<0.0001), therefore, we can safely conclude that the mean of the population from which Ealing and Greenwich are taken are very likely to be different from one another. Therefore, we can reject the Null hypothesis.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+t.test(FirstPumpArriving_AttendanceTime~IncidentStationGround, data=t_test_df)
+```
+
+To conclude the results from t-test, the mean response time of Ealing is 300 seconds. The mean response time of Greenwich is 260 seconds. The mean response time of Ealing is significantly larger compared to Greenwich, Welch t(3360) = 10.63, p < 0.0001, with a difference of 40 seconds.
+
+Above conclusions based on t-test are offered with significant caveats. The normal distributions for the concerned incident grounds are positively skewed and non-normal.Therefore, this means that the results of the t-test may be biased, and other methods are recommended to draw concrete conclusions.
+
+
+### 2.4.2 Estimations Approach Summary
+
+The figure below summarises the estimations approach of calculating the mean difference in response time of Ealing and Greenwich grounds.
+
+The mean response time for Ealing is 300 seconds 95% CI [295–304]. The mean response time for Greenwich is 260 seconds 95% CI [253–266]. The difference is 40 seconds 95% CI [32,47.9] smaller at Greenwich compared to Ealing.
+
+To conclude, Estimations approach is better and more reliable than NHST testing method as it provides more information rather than just a p value.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+grid.arrange(
+    ggplot(summary(estimate_resp_time_emm), aes(x=IncidentStationGround, y=emmean, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Response Time in sec", x="Incident Ground", subtitle="Error bars are 95% CIs", title="Response-Time") , 
+    ggplot(estimate_resp_time_contrast, aes(x=contrast, y=estimate, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Difference in Response Time in sec", x="Contrast", subtitle="Error bars are 95% CIs", title="Difference in Response-Time") +
+        geom_hline(yintercept=0, lty=2),
+    ncol=2
+)
+```
+
+
+
+
+
+
