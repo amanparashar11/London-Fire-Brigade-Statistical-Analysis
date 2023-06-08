@@ -1,6 +1,6 @@
 ---
 title: "Business Statistics Mid-Term Assessment IB94X0 2022-2023 #1"
-author: "2227324"
+author: "Aman Parashar"
 output: html_document
 ---
 
